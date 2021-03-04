@@ -23,17 +23,23 @@ class MyApp extends StatelessWidget {
 }
 
 class AudioPlayersTest extends StatelessWidget {
-  final String audioURL = ''; // link to mp3 file stored on github in this repo
+  // Audio URL for Testing
+  final String audioURL = 'https://file-examples-com.github.io/uploads/2017/11/file_example_MP3_1MG.mp3'; // Example MP3 File on Web
 
   // Download Audio File
   Future<File> _downloadAudioFile() async {
-    http.Client _client = http.Client();
-    var req = await _client.get(Uri.parse(audioURL));
-    var bytes = req.bodyBytes;
-    String dir = (await getApplicationDocumentsDirectory()).path;
-    File audioFile = new File('$dir/audio.m4a');
-    await audioFile.writeAsBytes(bytes);
-    return audioFile;
+    try {
+      http.Client _client = http.Client();
+      var req = await _client.get(Uri.parse(audioURL));
+      var bytes = req.bodyBytes;
+      String dir = (await getApplicationDocumentsDirectory()).path;
+      File audioFile = new File('$dir/audio.mp3');
+      await audioFile.writeAsBytes(bytes);
+      return audioFile;
+    } catch (error) {
+      print('DOWNLOAD ERROR: $error');
+      throw error;
+    }
   }
 
   @override
@@ -44,9 +50,11 @@ class AudioPlayersTest extends StatelessWidget {
         child: FutureBuilder(
           future: _downloadAudioFile(),
           builder: (context, AsyncSnapshot snapshot) {
-            // Downloading Audio File
+            // Waiting
             if (snapshot.connectionState == ConnectionState.waiting) return CircularProgressIndicator();
-            // Downloaded Audio File
+            // Error
+            if (snapshot.hasError) return Column(children: [Text('DOWNLOAD ERROR:'), Text(snapshot.error.toString())]);
+            // Done
             return PlayerWidget(audioFile: snapshot.data);
           },
         ),
@@ -63,46 +71,46 @@ class PlayerWidget extends StatefulWidget {
 }
 
 class _PlayerWidgetState extends State<PlayerWidget> {
-  AudioPlayer audioPlayer = AudioPlayer();
-  bool _waiting = false;
+  AudioPlayer _player = AudioPlayer();
   bool _playing = false;
+  String _error;
+
+  // Play
+  Future<void> _play() async {
+    _player.play(widget.audioFile.path, isLocal: true);
+    setState(() {
+      _playing = true;
+    });
+    _player.onPlayerError.listen((String message) {
+      setState(() {
+        _playing = false;
+
+        _error = message;
+      });
+    });
+  }
+
+  // Pause
+  Future<void> _pause() async {
+    _player.pause();
+    setState(() {
+      _playing = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
         child: Center(
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           OutlinedButton.icon(
             icon: Icon(_playing ? Icons.pause_circle_filled : Icons.play_circle_filled),
             label: Text(_playing ? 'PAUSE' : 'PLAY'),
-            onPressed: _waiting
-                ? null
-                : () async {
-                    // Pause
-                    if (_playing) {
-                      setState(() {
-                        _waiting = true;
-                      });
-                      await audioPlayer.pause();
-                      setState(() {
-                        _waiting = false;
-                        _playing = false;
-                      });
-                    }
-                    // Play
-                    else {
-                      setState(() {
-                        _waiting = true;
-                      });
-                      await audioPlayer.play(widget.audioFile.path, isLocal: true);
-                      setState(() {
-                        _playing = true;
-                      });
-                    }
-                  },
+            onPressed: () => _playing ? _pause() : _play(),
           ),
-          if (_waiting) CircularProgressIndicator(),
+          if (_error != null) Column(children: [Text('PLAY ERROR:'), Text(_error.toString())]),
         ],
       ),
     ));
