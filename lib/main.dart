@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -24,7 +25,7 @@ class MyApp extends StatelessWidget {
 
 class AudioPlayersTest extends StatelessWidget {
   // Audio URL for Testing
-  final String audioURL = 'https://file-examples-com.github.io/uploads/2017/11/file_example_MP3_1MG.mp3'; // Example MP3 File on Web
+  final String audioURL = 'https://itsallwidgets.com/podcast/download/episode-40.mp3'; // Example MP3
 
   // Download Audio File
   Future<File> _downloadAudioFile() async {
@@ -73,18 +74,42 @@ class PlayerWidget extends StatefulWidget {
 class _PlayerWidgetState extends State<PlayerWidget> {
   AudioPlayer _player = AudioPlayer();
   bool _playing = false;
+  Duration _duration = Duration.zero;
+  Duration _position = Duration.zero;
   String _error;
 
   // Play
   Future<void> _play() async {
+    // Load and Play
+    String url = widget.audioFile.path;
+    int duration = await _player.setUrl(url, isLocal: true);
     _player.play(widget.audioFile.path, isLocal: true);
+
+    // Set Notification
+    _player.setNotification(
+      title: 'Test Podcast',
+      forwardSkipInterval: Duration(seconds: 30),
+      backwardSkipInterval: Duration(seconds: 30),
+      duration: Duration(seconds: duration),
+      elapsedTime: Duration.zero,
+    );
+
     setState(() {
       _playing = true;
+      _duration = Duration(seconds: duration);
     });
+
+    // Listen for Position
+    _player.onAudioPositionChanged.listen((Duration position) {
+      setState(() {
+        _position = position;
+      });
+    });
+
+    // Listen for Error
     _player.onPlayerError.listen((String message) {
       setState(() {
         _playing = false;
-
         _error = message;
       });
     });
@@ -105,11 +130,31 @@ class _PlayerWidgetState extends State<PlayerWidget> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          // Play / Pause
           OutlinedButton.icon(
             icon: Icon(_playing ? Icons.pause_circle_filled : Icons.play_circle_filled),
             label: Text(_playing ? 'PAUSE' : 'PLAY'),
             onPressed: () => _playing ? _pause() : _play(),
           ),
+
+          // Current Position
+          Text('Position: $_position'),
+
+          // Skip Forward / Back
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                icon: Icon(Icons.replay_30, size: 30),
+                onPressed: () => _player.seek(Duration(seconds: math.max(0, _position.inSeconds - 30))),
+              ),
+              IconButton(
+                icon: Icon(Icons.forward_30, size: 30),
+                onPressed: () => _player.seek(Duration(seconds: math.max(_duration.inSeconds, _position.inSeconds + 30))),
+              ),
+            ],
+          ),
+
           if (_error != null) Column(children: [Text('PLAY ERROR:'), Text(_error.toString())]),
         ],
       ),
